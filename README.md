@@ -1,4 +1,7 @@
 # Empirical Study of Just-In-Time Defect Prediction
+
+This repository is an adapted replication package based on Hugo Liang's EmS-JIT-DP project, with additional Windows setup and smoke-test scripts.
+
 Replication package for the paper entitled: Revisiting Pre-trained Models and Feature Fusion Strategies for Just-In-Time Defect Prediction
 
 ### Data Preparation
