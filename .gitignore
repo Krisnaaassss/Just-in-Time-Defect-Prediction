@@ -3,3 +3,11 @@ drawing
 logs
 Dataset/LApredict
 Dataset/covert2Alpaca.py
+Dataset/fine-tuning/JITDefectPrediction/Original/
+Dataset/fine-tuning/JITDefectPrediction/Unified/
+models/codet5_base/
+outputs/models/fine-tuning/JITDefectPrediction/SF/codet5/
+__pycache__/
+*/__pycache__/
+*/*/__pycache__/
+*.pyc

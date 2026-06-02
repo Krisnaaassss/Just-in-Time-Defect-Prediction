@@ -31,6 +31,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def collate_features(features):
+    return features
+
+
+class SerialPool:
+    def map(self, func, iterable):
+        return list(map(func, iterable))
+
+
+def build_pool(args):
+    return SerialPool() if os.name == "nt" else multiprocessing.Pool(min(24, args.cpu_count))
+
+
 def set_seeds(seed):
     torch.manual_seed(seed)
     torch.random.manual_seed(seed)
@@ -74,8 +87,6 @@ def load_scheduler_optimizer(args, model):
 
 
 def get_loader(data_file, args, tokenizer, pool, eval=False, batch_size=None, oversample=False, rand=False):
-    def fn(features):
-        return features
     global_rank = args.global_rank
     dataset = SimpleJITDPDataset(
             tokenizer, pool, args, data_file, oversample=oversample)
@@ -96,12 +107,13 @@ def get_loader(data_file, args, tokenizer, pool, eval=False, batch_size=None, ov
     else:
         sampler = SequentialSampler(dataset)
     logger.info(f"Sample size: {len(sampler)}.")
+    num_workers = 0 if os.name == "nt" else args.cpu_count
     if batch_size is None:
         dataloader = DataLoader(
-            dataset, sampler=sampler, batch_size=args.train_batch_size, num_workers=args.cpu_count, collate_fn=fn)
+            dataset, sampler=sampler, batch_size=args.train_batch_size, num_workers=num_workers, collate_fn=collate_features)
     else:
         dataloader = DataLoader(
-            dataset, sampler=sampler, batch_size=batch_size, num_workers=args.cpu_count, collate_fn=fn)
+            dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, collate_fn=collate_features)
     return dataset, sampler, dataloader
 
 
@@ -131,7 +143,7 @@ def finetune(args, config, model, tokenizer, scheduler, optimizer):
     save_steps = args.save_steps
     args.train_batch_size = int(
         args.train_batch_size / args.gradient_accumulation_steps)
-    pool = multiprocessing.Pool(min(24, args.cpu_count))
+    pool = build_pool(args)
 
     _, _, train_dataloader = get_loader(args.train_filename, args, tokenizer,
                                         pool, oversample=False, rand=True)
@@ -385,7 +397,7 @@ def eval_epoch_metrics(args, eval_dataloader, model, tokenizer, show_bar=False, 
 
 def test(args, model, tokenizer):
     set_seeds(args.seed)
-    pool = multiprocessing.Pool(args.cpu_count)
+    pool = build_pool(args)
 
     model.init_MF_classifier()
     if os.path.exists("{}/checkpoint-best-f1/pytorch_model.bin".format(args.output_dir)) and \

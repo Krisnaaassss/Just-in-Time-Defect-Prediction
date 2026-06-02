@@ -5,6 +5,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import (DataLoader, RandomSampler,
                               SequentialSampler)
 import argparse
+import json
 import logging
 import multiprocessing
 import os
@@ -29,6 +30,20 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def collate_features(features):
+    return features
+
+
+class SerialPool:
+    def map(self, func, iterable):
+        return list(map(func, iterable))
+
+
+def build_pool(args):
+    return SerialPool() if os.name == "nt" else multiprocessing.Pool(args.cpu_count)
+
 
 def auc_pc(label, pred):
     lr_probs = np.array(pred)
@@ -81,8 +96,6 @@ def load_scheduler_optimizer(args, model):
 
 
 def get_loader(data_file, args, tokenizer, pool, eval=False, batch_size=None, oversample=False, rand=False):
-    def fn(features):
-        return features
     global_rank = args.global_rank
     # only diff and message without code context
     dataset = SimpleJITDPDataset(
@@ -105,12 +118,13 @@ def get_loader(data_file, args, tokenizer, pool, eval=False, batch_size=None, ov
         sampler = SequentialSampler(dataset)
 
     logger.info(f"Sample size: {len(sampler)}.")
+    num_workers = 0 if os.name == "nt" else args.cpu_count
     if batch_size is None:
         dataloader = DataLoader(
-            dataset, sampler=sampler, batch_size=args.train_batch_size, num_workers=args.cpu_count, collate_fn=fn)
+            dataset, sampler=sampler, batch_size=args.train_batch_size, num_workers=num_workers, collate_fn=collate_features)
     else:
         dataloader = DataLoader(
-            dataset, sampler=sampler, batch_size=batch_size, num_workers=args.cpu_count, collate_fn=fn)
+            dataset, sampler=sampler, batch_size=batch_size, num_workers=num_workers, collate_fn=collate_features)
     return dataset, sampler, dataloader
 
 
@@ -140,7 +154,7 @@ def finetune(args, config, model, tokenizer, scheduler, optimizer):
     save_steps = args.save_steps
     args.train_batch_size = int(
         args.train_batch_size / args.gradient_accumulation_steps)
-    pool = multiprocessing.Pool(args.cpu_count)
+    pool = build_pool(args)
 
     _, _, train_dataloader = get_loader(
         args.train_filename, args, tokenizer, pool, oversample=False, rand=True)
@@ -413,7 +427,7 @@ def eval_metrics_epoch(args, eval_dataloader, model, tokenizer, show_bar=False, 
 
 def test(args, model, tokenizer):
     set_seeds(args.seed)
-    pool = multiprocessing.Pool(args.cpu_count)
+    pool = build_pool(args)
 
     if os.path.exists("{}/checkpoint-best-f1/pytorch_model.bin".format(args.output_dir)) and \
             (args.load_model_path is None or args.do_train is True):
@@ -429,6 +443,12 @@ def test(args, model, tokenizer):
 
     cur_res = eval_metrics_epoch(
         args, test_dataloader, model, tokenizer, show_bar=True, test=True)
+    metrics_dir = os.path.join(args.output_dir, "checkpoint-best-f1")
+    os.makedirs(metrics_dir, exist_ok=True)
+    with open(os.path.join(metrics_dir, "test_metrics.json"), "w") as f:
+        json.dump(cur_res, f, indent=2)
+    pd.DataFrame([cur_res]).to_csv(
+        os.path.join(metrics_dir, "test_metrics.csv"), index=False)
     logger.warning(f"Test Res: {cur_res}")
 
 
