@@ -55,6 +55,26 @@ python combine.py
 bash scripts/finetune_jitdp_SF_EF.sh -g 0
 ```
 
+#### 3. Simple smoke test for low-spec laptops
+
+This is for running a simple test on the `gerrit` project with smaller training settings.
+
+Windows Command Prompt:
+
+```bat
+cd /d "E:\ITS\Jurnal RPL\Project RPL\EmS-JIT-DP"
+conda activate EmS
+.\scripts\finetune_jitdp_SF_gerrit_smoke.bat
+```
+
+Git Bash:
+
+```bash
+cd "/e/ITS/Jurnal RPL/Project RPL/EmS-JIT-DP"
+source /e/Miniconda/etc/profile.d/conda.sh
+conda activate EmS
+bash scripts/finetune_jitdp_SF_gerrit_smoke.sh
+```
 
 ### Get Involved
 Please create a GitHub issue if you have any questions, suggestions, requests or bug-reports.
